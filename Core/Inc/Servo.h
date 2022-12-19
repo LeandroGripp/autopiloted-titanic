@@ -9,9 +9,6 @@
 #define INC_SERVO_H_
 
 
-//#define PERIOD 1250
-//#define CHANNEL TIM_CHANNEL_2
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

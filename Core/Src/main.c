@@ -39,7 +39,7 @@ typedef struct {
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define PERIOD 1250
+#define PERIOD 1000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -111,10 +111,12 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM3_Init();
   MX_TIM2_Init();
+  MX_USART1_UART_Init();
+  MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
   setupBLE(&huart1, &huart3);
   setMotorDirection(Forward);
-  setupMotor(&htim2);
+  setupMotor(&htim2, TIM_CHANNEL_2, PERIOD);
 
   int8_t error = 0;
   int8_t past_error = 0;
@@ -132,61 +134,70 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
-  {
-    /* USER CODE END WHILE */
+    {
+      /* USER CODE END WHILE */
 
-	// LER SENSORES
-	// LEITURA DA POSIÇÃO
-	ListDevices_t listOfDevices = masterScanForSlaves();
-	getPowersFromReading(listOfDevices);
-	Point myPosition = get_position(b1Power, b2Power, b3Power);
-	free(listOfDevices.devices);
-	// LEITURA DOS DADOS DA BÚSSOLA
+  	// LER SENSORES
+  	// LEITURA DA POSIÇÃO
+  	ListDevices_t listOfDevices = masterScanForSlaves();
+  	getPowersFromReading(listOfDevices);
+  	Point myPosition = get_position(b1Power, b2Power, b3Power);
+  	free(listOfDevices.devices);
+  	// LEITURA DOS DADOS DA BÚSSOLA
 
-	// CALCULAR ERRO
+  	uint16_t theta_g = 0; //Angulo medido pela bussola - ALTERAR
 
-	// CALCULAR SINAL DE CONTROLE DE ANGULO
+  	// CALCULAR ERRO
 
-	if (error==0){
-		I = 0;
-	}
-	P = error;
-	I = I + error;
-	if (I > 90){
-		I = 90;
-	}
-	else if (I < -90){
-		I = -90;
-	}
-	D = error - past_error;
+  	Point b1; //Ponto do primeiro beacon - ALTERAR
+  	b1.x = 0; //ALTERAR
+  	b1.y = 0; //ALTERAR
 
-	uint8_t PID = (Kp*P) + (Ki*I) + (Kd*D);
-
-	past_error = error;
-
-	// CONTROLAR OS MOTORES
-
-	if (PID >= 0){
-		angle -= PID;
-	}
-	else{
-		angle += PID;
-	}
-
-	if(error<0)
-		speed = 100+error;
-	else
-		speed = 100-error;
-
-	setServoAngle(&htim3,TIM_CHANNEL_2,PERIOD,angle);
-	setMotorSpeed(&htim2,TIM_CHANNEL_2,PERIOD,speed);
-
-	// OUTRAS ROTINAS PARA SITUAÇÕES ESPECIFICAS
+  	error = (180.0/M_PI)*(M_PI/2 - atan2((b1.y - myPosition.y), (b1.x - myPosition.x)) - theta_g); // Verificar se vale para todo ponto
 
 
-    /* USER CODE BEGIN 3 */
-  }
-  /* USER CODE END 3 */
+  	// CALCULAR SINAL DE CONTROLE DE ANGULO
+
+  	if (error==0){
+  		I = 0;
+  	}
+  	P = error;
+  	I = I + error;
+  	if (I > 90){
+  		I = 90;
+  	}
+  	else if (I < -90){
+  		I = -90;
+  	}
+  	D = error - past_error;
+
+  	uint8_t PID = (Kp*P) + (Ki*I) + (Kd*D);
+
+  	past_error = error;
+
+  	// CONTROLAR OS MOTORES
+
+  	if (PID >= 0){
+  		angle -= PID;
+  	}
+  	else{
+  		angle += PID;
+  	}
+
+  	if(error<0)
+  		speed = 100+error;
+  	else
+  		speed = 100-error;
+
+  	setServoAngle(&htim3,TIM_CHANNEL_2,PERIOD,(-angle)); // o angulo do leme é contrario ao que o barco vai se direcionar
+  	setMotorSpeed(&htim2,TIM_CHANNEL_2,PERIOD,speed);
+
+  	// OUTRAS ROTINAS PARA SITUAÇÕES ESPECIFICAS
+
+
+      /* USER CODE BEGIN 3 */
+    }
+  /* USER CODE END 3 */
 }
 
 /**
@@ -206,7 +217,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI_DIV2;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL2;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -216,8 +227,8 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV16;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV16;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
@@ -245,9 +256,9 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 0;
+  htim2.Init.Prescaler = 320;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 1250;
+  htim2.Init.Period = 1000;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
@@ -261,10 +272,10 @@ static void MX_TIM2_Init(void)
     Error_Handler();
   }
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 94;
+  sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -295,9 +306,9 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 0;
+  htim3.Init.Prescaler = 320;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 1250;
+  htim3.Init.Period = 1000;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)

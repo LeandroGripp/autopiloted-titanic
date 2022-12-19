@@ -10,10 +10,10 @@
 
 TIM_OC_InitTypeDef sConfigOC_DC_Motor = {0};
 
-void setupMotor(TIM_HandleTypeDef *htimx){
-	HAL_TIM_PWM_Start(htimx, TIM_CHANNEL_3);
+void setupMotor(TIM_HandleTypeDef *htimx, uint32_t channel, uint16_t period){
+	HAL_TIM_PWM_Start(htimx, channel);
 	setMotorDirection(Forward);
-	setMotorSpeed(htimx,TIM_CHANNEL_3,1250,0);
+	setMotorSpeed(htimx,channel,period,0);
 }
 
 void setMotorSpeed(TIM_HandleTypeDef *htimx, uint32_t channel, uint16_t period, uint16_t speed){

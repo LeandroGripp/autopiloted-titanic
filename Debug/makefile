@@ -61,8 +61,8 @@ all: main-build
 main-build: Titanic.elf secondary-outputs
 
 # Tool invocations
-Titanic.elf: $(OBJS) $(USER_OBJS) D:\Arquivos\Documents\Estudo\UFMG\2022-2\Prog\ de\ Sistemas\ Embarcados\Trabalho\ 2\ -\ torneio\Titanic\STM32F103RBTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "Titanic.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"D:\Arquivos\Documents\Estudo\UFMG\2022-2\Prog de Sistemas Embarcados\Trabalho 2 - torneio\Titanic\STM32F103RBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Titanic.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Titanic.elf: $(OBJS) $(USER_OBJS) /home/opdpires/BARCO/autopiloted-titanic/STM32F103RBTX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "Titanic.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"/home/opdpires/BARCO/autopiloted-titanic/STM32F103RBTX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Titanic.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
