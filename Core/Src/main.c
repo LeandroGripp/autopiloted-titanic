@@ -125,6 +125,8 @@ int main(void)
   const int8_t Ki = 0.1;
   const int8_t Kd = 1;
 
+  HAL_Delay(10000);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
