@@ -153,7 +153,7 @@ int main(void)
   	b1.x = 0; //ALTERAR
   	b1.y = 0; //ALTERAR
 
-  	error = (180.0/M_PI)*(M_PI/2 - atan2((b1.y - myPosition.y), (b1.x - myPosition.x)) - theta_g); // Verificar se vale para todo ponto
+  	error = (180.0/M_PI)*(M_PI/2 + atan2((b1.y - myPosition.y), (b1.x - myPosition.x)) - theta_g); // Verificar se vale para todo ponto
 
 
   	// CALCULAR SINAL DE CONTROLE DE ANGULO
