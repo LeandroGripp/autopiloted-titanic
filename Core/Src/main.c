@@ -81,6 +81,8 @@ Point get_position(float rss1, float rss2, float rss3);
 /* USER CODE BEGIN 0 */
 uint8_t angle = 0;
 uint8_t speed = 0;
+uint8_t offset = 15;
+Point b1 = {-19.866733, -43.964666};
 int b1Power = 0;
 int b2Power = 0;
 int b3Power = 0;
@@ -120,7 +122,7 @@ int main(void)
   MX_I2C1_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  //setupBLE(&huart1, &huart3);
+  setupBLE(&huart3, &huart2);
   setMotorDirection(Forward);
   setupMotor(&htim2, TIM_CHANNEL_2, PERIOD);
   setServoAngle(&htim3,TIM_CHANNEL_2,PERIOD, offset);
@@ -130,9 +132,9 @@ int main(void)
   int8_t P = 0;
   int8_t I = 0;
   int8_t D = 0;
-  const float Kp = 0.5;
-  const float Ki = 0;
-  const float Kd = 0.5;
+  const float Kp = 1;
+  const float Ki = 0.1;
+  const float Kd = 1;
 
   int16_t theta_g = 0;
   
@@ -172,7 +174,8 @@ int main(void)
 
     // CALCULAR ERRO
 
-    error = (180.0/M_PI)*(M_PI/2 + atan2((b1.y - myPosition.y), (b1.x - myPosition.x)) - theta_g); // Verificar se vale para todo ponto
+
+    error = (180.0/M_PI)*(M_PI/2 + atan2((b1.y - myPosition.y), (b1.x - myPosition.x)) - theta_g);
 
 
     // CALCULAR SINAL DE CONTROLE DE ANGULO

@@ -1,2 +1,2 @@
 Servo.c:15:6:setServoAngle	40	static
-Servo.c:29:6:setServoPWM	56	static
+Servo.c:60:6:setServoPWM	56	static
