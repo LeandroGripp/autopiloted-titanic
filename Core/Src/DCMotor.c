@@ -13,12 +13,12 @@ TIM_OC_InitTypeDef sConfigOC_DC_Motor = {0};
 void setupMotor(TIM_HandleTypeDef *htimx, uint32_t channel, uint16_t period){
 	HAL_TIM_PWM_Start(htimx, channel);
 	setMotorDirection(Forward);
-	setMotorSpeed(htimx,channel,period,0);
+	setMotorSpeed(htimx,channel,period,100);
 }
 
 void setMotorSpeed(TIM_HandleTypeDef *htimx, uint32_t channel, uint16_t period, uint16_t speed){
 
-	sConfigOC_DC_Motor.Pulse = (speed*period)/100;
+	sConfigOC_DC_Motor.Pulse = (1.0*speed*period)/100;
 	sConfigOC_DC_Motor.OCMode = TIM_OCMODE_PWM1;
 	sConfigOC_DC_Motor.OCPolarity = TIM_OCPOLARITY_HIGH;
 	sConfigOC_DC_Motor.OCFastMode = TIM_OCFAST_DISABLE;
@@ -56,7 +56,7 @@ void setMotorDirection(Direction dir_code){
 
 		comparator = comparator >> 1;
 
-		HAL_GPIO_WritePin(GPIOA, DIR_EN_Pin, bit_to_send);
+		HAL_GPIO_WritePin(GPIOA, DIR_SER_Pin, bit_to_send);
 		HAL_Delay(1);
 		HAL_GPIO_WritePin(GPIOB, DIR_CLK_Pin, GPIO_PIN_SET);
 		HAL_Delay(1);

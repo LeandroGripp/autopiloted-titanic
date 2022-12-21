@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include "DCMotor.h"
 #include "Servo.h"
+#include "QMC5883.h"
 #include "Bluetooth_BLE_V4.2_JDY-18.h"
 #include <math.h>
 #include <string.h>
@@ -39,23 +40,26 @@ typedef struct {
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define PERIOD 1000
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+#define PERIOD 1000
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 
-UART_HandleTypeDef huart1;
+UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
-
+QMC_t compass;
+Compass_config config;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -63,8 +67,9 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM2_Init(void);
-static void MX_USART1_UART_Init(void);
 static void MX_USART3_UART_Init(void);
+static void MX_I2C1_Init(void);
+static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 void getPowersFromReading(ListDevices_t listOfDevices);
 int getAverage(int nbOfEntries, int entries[]);
@@ -111,22 +116,40 @@ int main(void)
   MX_GPIO_Init();
   MX_TIM3_Init();
   MX_TIM2_Init();
-  MX_USART1_UART_Init();
   MX_USART3_UART_Init();
+  MX_I2C1_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  setupBLE(&huart1, &huart3);
+  //setupBLE(&huart1, &huart3);
   setMotorDirection(Forward);
   setupMotor(&htim2, TIM_CHANNEL_2, PERIOD);
+  setServoAngle(&htim3,TIM_CHANNEL_2,PERIOD, offset);
 
   int8_t error = 0;
   int8_t past_error = 0;
   int8_t P = 0;
   int8_t I = 0;
   int8_t D = 0;
-  const int8_t Kp = 1;
-  const int8_t Ki = 0.1;
-  const int8_t Kd = 1;
+  const float Kp = 0.5;
+  const float Ki = 0;
+  const float Kd = 0.5;
 
+  int16_t theta_g = 0;
+  
+  compass.ADDR_Control_RegisterA = ADDR_REG_A;
+  compass.ADDR_Control_RegisterB = ADDR_REG_B;
+  compass.ADDR_Mode_Register = ADDR_REG_MODE;
+  compass.ADDR_Status_Register = ADDR_REG_STATUS;
+
+  config.gain = _1_3;
+  config.meas_mode = Positive;
+  config.op_mode = Continuous_meas;
+  config.output_rate = 15;
+  config.samples_num = eight;
+
+  QMC_init(&compass,&hi2c1,&config);
+
+  setMotorSpeed(&htim2,TIM_CHANNEL_2,PERIOD,100);
   HAL_Delay(10000);
 
   /* USER CODE END 2 */
@@ -144,56 +167,59 @@ int main(void)
   	Point myPosition = get_position(b1Power, b2Power, b3Power);
   	free(listOfDevices.devices);
   	// LEITURA DOS DADOS DA BÚSSOLA
+    if(!QMC_read(&compass)){
+    	theta_g = (int16_t) compass.heading;
 
-  	uint16_t theta_g = 0; //Angulo medido pela bussola - ALTERAR
+    // CALCULAR ERRO
 
-  	// CALCULAR ERRO
-
-  	Point b1; //Ponto do primeiro beacon - ALTERAR
-  	b1.x = 0; //ALTERAR
-  	b1.y = 0; //ALTERAR
-
-  	error = (180.0/M_PI)*(M_PI/2 + atan2((b1.y - myPosition.y), (b1.x - myPosition.x)) - theta_g); // Verificar se vale para todo ponto
+    error = (180.0/M_PI)*(M_PI/2 + atan2((b1.y - myPosition.y), (b1.x - myPosition.x)) - theta_g); // Verificar se vale para todo ponto
 
 
-  	// CALCULAR SINAL DE CONTROLE DE ANGULO
+    // CALCULAR SINAL DE CONTROLE DE ANGULO
+    if (error==0){
+    	I = 0;
+    }
+    P = error;
+    I = I + error;
 
-  	if (error==0){
-  		I = 0;
-  	}
-  	P = error;
-  	I = I + error;
-  	if (I > 90){
-  		I = 90;
-  	}
-  	else if (I < -90){
-  		I = -90;
-  	}
-  	D = error - past_error;
+    if (I > 45){
+    	I = 45;
+    }
+    else if (I < -45){
+    	I = -45;
+    }
 
-  	uint8_t PID = (Kp*P) + (Ki*I) + (Kd*D);
+    D = error - past_error;
 
-  	past_error = error;
+    uint8_t PID = (Kp*P) + (Ki*I) + (Kd*D);
 
-  	// CONTROLAR OS MOTORES
+    past_error = error;
 
-  	if (PID >= 0){
-  		angle -= PID;
-  	}
-  	else{
-  		angle += PID;
-  	}
+    // CONTROLAR OS MOTORES
 
-  	if(error<0)
-  		speed = 100+error;
-  	else
-  		speed = 100-error;
+    if (PID >= 0){
+    	angle -= PID;
+    }
+    else{
+    	angle += PID;
+    }
 
-  	setServoAngle(&htim3,TIM_CHANNEL_2,PERIOD,(-angle)); // o angulo do leme é contrario ao que o barco vai se direcionar
-  	setMotorSpeed(&htim2,TIM_CHANNEL_2,PERIOD,speed);
+    speed = 100;
+    /*if(error<0)
+    	speed = 100+error;
+    else
+    	speed = 100-error;*/
 
-  	// OUTRAS ROTINAS PARA SITUAÇÕES ESPECIFICAS
+    if (angle >45)
+    	angle = 45;
+    else if (angle < -45)
+    	angle = -45;
 
+
+    setServoAngle(&htim3,TIM_CHANNEL_2,PERIOD,angle+offset); // o angulo do leme é contrario ao que o barco vai se direcionar
+    setMotorSpeed(&htim2,TIM_CHANNEL_2,PERIOD,speed);
+
+    }
 
       /* USER CODE BEGIN 3 */
     }
@@ -235,6 +261,40 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
 }
 
 /**
@@ -346,35 +406,35 @@ static void MX_TIM3_Init(void)
 }
 
 /**
-  * @brief USART1 Initialization Function
+  * @brief USART2 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_USART1_UART_Init(void)
+static void MX_USART2_UART_Init(void)
 {
 
-  /* USER CODE BEGIN USART1_Init 0 */
+  /* USER CODE BEGIN USART2_Init 0 */
 
-  /* USER CODE END USART1_Init 0 */
+  /* USER CODE END USART2_Init 0 */
 
-  /* USER CODE BEGIN USART1_Init 1 */
+  /* USER CODE BEGIN USART2_Init 1 */
 
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 9600;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 9600;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART1_Init 2 */
+  /* USER CODE BEGIN USART2_Init 2 */
 
-  /* USER CODE END USART1_Init 2 */
+  /* USER CODE END USART2_Init 2 */
 
 }
 
@@ -427,7 +487,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LD2_Pin|DIR_LATCH_Pin|DIR_EN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, LD2_Pin|DIR_LATCH_Pin|DIR_EN_Pin|DIR_SER_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(DIR_CLK_GPIO_Port, DIR_CLK_Pin, GPIO_PIN_RESET);
@@ -438,8 +498,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LD2_Pin DIR_LATCH_Pin DIR_EN_Pin */
-  GPIO_InitStruct.Pin = LD2_Pin|DIR_LATCH_Pin|DIR_EN_Pin;
+  /*Configure GPIO pins : LD2_Pin DIR_LATCH_Pin DIR_EN_Pin DIR_SER_Pin */
+  GPIO_InitStruct.Pin = LD2_Pin|DIR_LATCH_Pin|DIR_EN_Pin|DIR_SER_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
